@@ -21,7 +21,6 @@ The service manages to-do items with the following lifecycle:
 | Idempotency | Marking a `NOT_DONE` item as `NOT_DONE` again is a no-op; `doneAt` remains `null`. |
 | Due date on creation | The `dueAt` field must be in the future at the time of creation. |
 | Error format | Errors are returned as [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) (`application/problem+json`). |
-| Authentication | Not implemented as per the requirements. |
 | Persistence | H2 in-memory database – data is lost on restart. |
 
 ---
