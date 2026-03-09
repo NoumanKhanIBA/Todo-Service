@@ -229,8 +229,9 @@ class TodoControllerIntegrationTest {
 
             mockMvc.perform(get("/api/todos"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasSize(1)))
-                    .andExpect(jsonPath("$[0].status").value("NOT_DONE"));
+                    .andExpect(jsonPath("$.content", hasSize(1)))              // $.content not $
+                    .andExpect(jsonPath("$.content[0].status").value("NOT_DONE"))
+                    .andExpect(jsonPath("$.totalElements").value(1));
         }
 
         @Test
@@ -242,7 +243,8 @@ class TodoControllerIntegrationTest {
 
             mockMvc.perform(get("/api/todos").param("all", "true"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasSize(3)));
+                    .andExpect(jsonPath("$.content", hasSize(3)))              // $.content not $
+                    .andExpect(jsonPath("$.totalElements").value(3));
         }
 
         @Test
@@ -250,7 +252,8 @@ class TodoControllerIntegrationTest {
         void shouldReturnEmptyList() throws Exception {
             mockMvc.perform(get("/api/todos"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasSize(0)));
+                    .andExpect(jsonPath("$.content", hasSize(0)))              // $.content not $
+                    .andExpect(jsonPath("$.totalElements").value(0));
         }
     }
 
