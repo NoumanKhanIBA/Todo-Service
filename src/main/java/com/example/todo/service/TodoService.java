@@ -10,6 +10,8 @@ import com.example.todo.model.TodoStatus;
 import com.example.todo.repository.TodoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,9 @@ public class TodoService {
     private final TodoRepository todoRepository;
     private final TodoMapper todoMapper;
 
+    /**
+     * Creates a new todo item with status NOT_DONE.
+     */
     public TodoItemResponse createTodo(CreateTodoRequest request) {
         TodoItem item = TodoItem.builder()
                 .description(request.getDescription())
@@ -52,6 +57,10 @@ public class TodoService {
         TodoItem item = findOrThrow(id);
         guardNotPastDue(item);
 
+        if (item.getStatus() == TodoStatus.DONE) {
+            return todoMapper.toResponse(item);  // make sure item is passed, not null
+        }
+
         item.setStatus(TodoStatus.DONE);
         item.setDoneAt(LocalDateTime.now());
         log.info("Marked todo id={} as DONE", id);
@@ -68,11 +77,11 @@ public class TodoService {
         return todoMapper.toResponse(todoRepository.save(item));
     }
 
-    public List<TodoItemResponse> getItems(boolean includeAll) {
-        List<TodoItem> items = includeAll
-                ? todoRepository.findAll()
-                : todoRepository.findByStatus(TodoStatus.NOT_DONE);
-        return items.stream().map(todoMapper::toResponse).toList();
+    public Page<TodoItemResponse> getItems(boolean includeAll, Pageable pageable) {
+        Page<TodoItem> items = includeAll
+                ? todoRepository.findAll(pageable)
+                : todoRepository.findByStatus(TodoStatus.NOT_DONE,pageable);
+        return items.map(todoMapper::toResponse);
     }
 
 

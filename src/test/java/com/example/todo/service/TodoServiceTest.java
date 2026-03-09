@@ -17,6 +17,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -42,6 +46,9 @@ class TodoServiceTest {
     private TodoItem notDoneItem;
     private TodoItem doneItem;
     private TodoItem pastDueItem;
+
+    // Default pageable used across tests
+    private final PageRequest DEFAULT_PAGEABLE = PageRequest.of(0, 10, Sort.by("createdAt").descending());
 
     @BeforeEach
     void setUp() {
@@ -159,6 +166,19 @@ class TodoServiceTest {
         }
 
         @Test
+        @DisplayName("should be idempotent - preserve original doneAt if already DONE")
+        void shouldBeIdempotentWhenAlreadyDone() {
+            LocalDateTime originalDoneAt = doneItem.getDoneAt();
+            when(todoRepository.findById(2L)).thenReturn(Optional.of(doneItem));
+
+            TodoItemResponse response = todoService.markAsDone(2L);
+
+            assertThat(response.getStatus()).isEqualTo(TodoStatus.DONE);
+            assertThat(response.getDoneAt()).isEqualTo(originalDoneAt); // doneAt must not change
+            verify(todoRepository, never()).save(any());                // no unnecessary save
+        }
+
+        @Test
         @DisplayName("should reject marking a PAST_DUE item as done")
         void shouldRejectPastDueItem() {
             when(todoRepository.findById(3L)).thenReturn(Optional.of(pastDueItem));
@@ -201,22 +221,54 @@ class TodoServiceTest {
         @Test
         @DisplayName("should return only NOT_DONE items by default")
         void shouldReturnNotDoneItems() {
-            when(todoRepository.findByStatus(TodoStatus.NOT_DONE)).thenReturn(List.of(notDoneItem));
+            Page<TodoItem> page = new PageImpl<>(List.of(notDoneItem), DEFAULT_PAGEABLE, 1);
+            when(todoRepository.findByStatus(TodoStatus.NOT_DONE, DEFAULT_PAGEABLE)).thenReturn(page);
 
-            List<TodoItemResponse> items = todoService.getItems(false);
+            Page<TodoItemResponse> result = todoService.getItems(false, DEFAULT_PAGEABLE);
 
-            assertThat(items).hasSize(1);
-            assertThat(items.get(0).getStatus()).isEqualTo(TodoStatus.NOT_DONE);
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).getStatus()).isEqualTo(TodoStatus.NOT_DONE);
+            assertThat(result.getTotalElements()).isEqualTo(1);
         }
 
         @Test
         @DisplayName("should return all items when includeAll is true")
         void shouldReturnAllItems() {
-            when(todoRepository.findAll()).thenReturn(List.of(notDoneItem, doneItem, pastDueItem));
+            Page<TodoItem> page = new PageImpl<>(
+                    List.of(notDoneItem, doneItem, pastDueItem), DEFAULT_PAGEABLE, 3);
+            when(todoRepository.findAll(DEFAULT_PAGEABLE)).thenReturn(page);
 
-            List<TodoItemResponse> items = todoService.getItems(true);
+            Page<TodoItemResponse> result = todoService.getItems(true, DEFAULT_PAGEABLE);
 
-            assertThat(items).hasSize(3);
+            assertThat(result.getContent()).hasSize(3);
+            assertThat(result.getTotalElements()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("should return correct page metadata")
+        void shouldReturnCorrectPageMetadata() {
+            PageRequest secondPage = PageRequest.of(1, 2, Sort.by("createdAt").descending());
+            Page<TodoItem> page = new PageImpl<>(List.of(pastDueItem), secondPage, 3);
+            when(todoRepository.findAll(secondPage)).thenReturn(page);
+
+            Page<TodoItemResponse> result = todoService.getItems(true, secondPage);
+
+            assertThat(result.getNumber()).isEqualTo(1);       // page index
+            assertThat(result.getSize()).isEqualTo(2);          // page size
+            assertThat(result.getTotalElements()).isEqualTo(3); // total across all pages
+            assertThat(result.getTotalPages()).isEqualTo(2);    // total pages
+        }
+
+        @Test
+        @DisplayName("should return empty page when no NOT_DONE items exist")
+        void shouldReturnEmptyPage() {
+            Page<TodoItem> emptyPage = new PageImpl<>(List.of(), DEFAULT_PAGEABLE, 0);
+            when(todoRepository.findByStatus(TodoStatus.NOT_DONE, DEFAULT_PAGEABLE)).thenReturn(emptyPage);
+
+            Page<TodoItemResponse> result = todoService.getItems(false, DEFAULT_PAGEABLE);
+
+            assertThat(result.getContent()).isEmpty();
+            assertThat(result.getTotalElements()).isEqualTo(0);
         }
     }
 
