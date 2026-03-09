@@ -116,6 +116,18 @@ class TodoControllerIntegrationTest {
                             .content(json(req)))
                     .andExpect(status().isBadRequest());
         }
+
+        @Test
+        @DisplayName("400 - should return clear message for invalid date format")
+        void shouldRejectInvalidDateFormat() throws Exception {
+            mockMvc.perform(post("/api/todos")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"description\": \"Buy groceries\", \"dueAt\": \"31-12-2026\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.title").value("Invalid Request Body"))
+                    .andExpect(jsonPath("$.detail").value(containsString("dueAt")))
+                    .andExpect(jsonPath("$.detail").value(containsString("yyyy-MM-dd'T'HH:mm:ss")));
+        }
     }
 
     @Nested
